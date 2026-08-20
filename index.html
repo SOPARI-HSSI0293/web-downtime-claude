@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Downtime Monitor — PT Hanwa Steel Service Indonesia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#14171b;
+    --panel:#1b2025;
+    --panel-2:#20262c;
+    --border:#2b3238;
+    --text:#dfe3e6;
+    --text-dim:#8b939b;
+    --text-faint:#5b636b;
+    --amber:#e0a133;
+    --amber-dim:#7a5a24;
+    --steel:#5b9bc0;
+    --steel-dim:#2f4a5c;
+    --green:#5cb87a;
+    --red:#d9534f;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      linear-gradient(180deg, rgba(224,161,51,0.03), transparent 200px),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, transparent 1px, transparent 24px),
+      var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    padding-bottom:60px;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+
+  /* ---------- Topbar ---------- */
+  header.topbar{
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, #171b1f, #14171b);
+    padding:18px 28px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .brand{display:flex; align-items:center; gap:14px;}
+  .brand-mark{
+    width:38px;height:38px;border:2px solid var(--amber);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'IBM Plex Mono'; font-weight:700; color:var(--amber);
+    font-size:13px; flex-shrink:0;
+  }
+  .brand-text h1{
+    font-size:16px; letter-spacing:0.06em; margin:0; font-weight:600;
+    text-transform:uppercase;
+  }
+  .brand-text p{margin:2px 0 0; font-size:11px; color:var(--text-dim); letter-spacing:0.04em;}
+  .status-chip{
+    font-family:'IBM Plex Mono'; font-size:11px; color:var(--text-dim);
+    display:flex; align-items:center; gap:8px; border:1px solid var(--border);
+    padding:6px 12px; border-radius:var(--radius); background:var(--panel);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green); box-shadow:0 0 6px var(--green);}
+  .dot.off{background:var(--text-faint); box-shadow:none;}
+
+  main{max-width:1360px; margin:0 auto; padding:22px 28px;}
+
+  /* ---------- Panels ---------- */
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+  }
+  .panel-title{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:0.12em;
+    color:var(--text-dim); padding:12px 16px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel-title span.tag{color:var(--amber); font-family:'IBM Plex Mono';}
+
+  /* ---------- Filters ---------- */
+  .filters{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px,1fr));
+    gap:16px;
+    padding:16px;
+  }
+  .filter-group label{
+    display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--text-dim); margin-bottom:7px;
+  }
+  .filter-group input[type=date]{
+    width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:7px 9px; border-radius:var(--radius); font-family:'IBM Plex Mono'; font-size:12.5px;
+  }
+  .chip-row{display:flex; flex-wrap:wrap; gap:6px; max-height:110px; overflow-y:auto; padding-right:2px;}
+  .chip{
+    font-family:'IBM Plex Mono'; font-size:11px; padding:5px 10px;
+    border:1px solid var(--border); border-radius:20px; cursor:pointer;
+    color:var(--text-dim); user-select:none; transition:all .12s ease; background:var(--panel-2);
+  }
+  .chip:hover{border-color:var(--steel);}
+  .chip.active{background:var(--steel-dim); border-color:var(--steel); color:#cfe6f5;}
+  .chip.active.warn{background:var(--amber-dim); border-color:var(--amber); color:#ffe3ad;}
+  .filter-actions{padding:0 16px 16px; display:flex; gap:10px;}
+  .btn{
+    font-family:'IBM Plex Mono'; font-size:11px; text-transform:uppercase; letter-spacing:0.06em;
+    padding:8px 16px; border-radius:var(--radius); border:1px solid var(--border);
+    background:var(--panel-2); color:var(--text-dim); cursor:pointer;
+  }
+  .btn:hover{color:var(--text); border-color:var(--text-faint);}
+  .btn.primary{border-color:var(--amber); color:var(--amber);}
+  .btn.primary:hover{background:var(--amber-dim); color:#ffe3ad;}
+
+  /* ---------- KPI ---------- */
+  .kpi-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+    gap:14px; margin-top:18px;
+  }
+  .kpi-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px 18px; position:relative; overflow:hidden;
+  }
+  .kpi-card::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--amber);
+  }
+  .kpi-card.alt::before{background:var(--steel);}
+  .kpi-label{font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim);}
+  .kpi-value{font-family:'IBM Plex Mono'; font-size:28px; font-weight:600; margin-top:8px; color:var(--text);}
+  .kpi-value small{font-size:13px; color:var(--text-dim); font-weight:400;}
+  .kpi-sub{font-size:11px; color:var(--text-faint); margin-top:4px; font-family:'IBM Plex Mono';}
+
+  /* ---------- Line status board (signature element) ---------- */
+  .board-wrap{padding:16px;}
+  .board-row{display:grid; grid-template-columns:150px 1fr 70px; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid var(--border);}
+  .board-row:last-child{border-bottom:none;}
+  .board-line-name{font-family:'IBM Plex Mono'; font-size:12px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .board-track{height:14px; background:var(--panel-2); border-radius:2px; overflow:hidden; border:1px solid var(--border);}
+  .board-fill{height:100%; background:linear-gradient(90deg, var(--steel), var(--amber)); transition:width .3s ease;}
+  .board-val{font-family:'IBM Plex Mono'; font-size:12px; text-align:right; color:var(--amber);}
+
+  /* ---------- Insights ---------- */
+  .insight-list{list-style:none; margin:0; padding:14px 18px; display:flex; flex-direction:column; gap:10px;}
+  .insight-list li{
+    font-size:13px; line-height:1.55; color:var(--text); padding-left:16px; position:relative;
+  }
+  .insight-list li::before{content:"▸"; position:absolute; left:0; color:var(--amber);}
+  .insight-list b{color:var(--amber); font-family:'IBM Plex Mono'; font-weight:600;}
+
+  /* ---------- Charts grid ---------- */
+  .charts-grid{
+    display:grid; grid-template-columns:1.3fr 1fr; gap:16px; margin-top:18px;
+  }
+  .charts-grid .full{grid-column:1 / -1;}
+  .chart-body{padding:14px 16px; height:280px;}
+  @media (max-width:900px){ .charts-grid{grid-template-columns:1fr;} }
+
+  /* ---------- Table ---------- */
+  .table-toolbar{display:flex; gap:10px; padding:12px 16px; align-items:center; flex-wrap:wrap;}
+  .table-toolbar input[type=text]{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:7px 10px; border-radius:var(--radius); font-family:'IBM Plex Mono'; font-size:12px; min-width:220px;
+  }
+  .table-count{margin-left:auto; font-family:'IBM Plex Mono'; font-size:11px; color:var(--text-dim);}
+  .table-scroll{max-height:480px; overflow:auto;}
+  table{width:100%; border-collapse:collapse; font-size:12px;}
+  thead th{
+    position:sticky; top:0; background:var(--panel-2); text-align:left; padding:9px 10px;
+    font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim);
+    border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer;
+  }
+  thead th:hover{color:var(--amber);}
+  tbody td{padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text); font-family:'IBM Plex Mono'; white-space:nowrap;}
+  tbody tr:hover{background:var(--panel-2);}
+  .sev-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px;}
+  .badge-shift{
+    font-family:'IBM Plex Mono'; font-size:10px; padding:2px 7px; border-radius:10px;
+    border:1px solid var(--border); color:var(--text-dim);
+  }
+  .empty-state{padding:40px 20px; text-align:center; color:var(--text-faint); font-size:13px;}
+
+  footer{max-width:1360px; margin:24px auto 0; padding:0 28px; color:var(--text-faint); font-size:11px; font-family:'IBM Plex Mono';}
+
+  .section-gap{margin-top:18px;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">DT</div>
+    <div class="brand-text">
+      <h1>Downtime Monitor</h1>
+      <p>PT Hanwa Steel Service Indonesia — Slitter &amp; Sheet Line</p>
+    </div>
+  </div>
+  <div class="status-chip">
+    <span class="dot off" id="statusDot"></span>
+    <span id="statusText">Menghubungkan ke sumber data…</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- FILTERS -->
+  <section class="panel">
+    <div class="panel-title">Filter <span class="tag" id="filterCount">0 record aktif</span></div>
+    <div class="filters">
+      <div class="filter-group">
+        <label>Tanggal Dari</label>
+        <input type="date" id="fDateFrom">
+      </div>
+      <div class="filter-group">
+        <label>Tanggal Sampai</label>
+        <input type="date" id="fDateTo">
+      </div>
+      <div class="filter-group">
+        <label>Shift</label>
+        <div class="chip-row" id="fShift"></div>
+      </div>
+      <div class="filter-group">
+        <label>Line / Mesin</label>
+        <div class="chip-row" id="fLine"></div>
+      </div>
+    </div>
+    <div class="filter-actions">
+      <button class="btn primary" id="btnApply">Terapkan Filter</button>
+      <button class="btn" id="btnReset">Reset</button>
+    </div>
+  </section>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpiGrid">
+    <!-- diisi oleh JS -->
+  </div>
+
+  <!-- INSIGHTS + LINE BOARD -->
+  <div class="charts-grid section-gap">
+    <div class="panel">
+      <div class="panel-title">Insight Otomatis <span class="tag">AI SUMMARY</span></div>
+      <ul class="insight-list" id="insightList"></ul>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Status Line <span class="tag">DOWNTIME / LINE</span></div>
+      <div class="board-wrap" id="lineBoard"></div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="charts-grid section-gap">
+    <div class="panel">
+      <div class="panel-title">Downtime per Kategori (menit)</div>
+      <div class="chart-body"><canvas id="chartCategory"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Kontribusi per Line</div>
+      <div class="chart-body"><canvas id="chartLine"></canvas></div>
+    </div>
+    <div class="panel full">
+      <div class="panel-title">Tren Downtime Harian (menit)</div>
+      <div class="chart-body"><canvas id="chartTrend"></canvas></div>
+    </div>
+    <div class="panel full">
+      <div class="panel-title">Perbandingan Shift per Line</div>
+      <div class="chart-body"><canvas id="chartShift"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="panel section-gap">
+    <div class="panel-title">Detail Data</div>
+    <div class="table-toolbar">
+      <input type="text" id="tableSearch" placeholder="Cari Report ID / catatan…">
+      <span class="table-count" id="tableCount">0 baris</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th data-key="date">Tanggal</th>
+            <th data-key="shift">Shift</th>
+            <th data-key="line">Line</th>
+            <th data-key="totalDowntime">Total (menit)</th>
+            <th data-key="topCategory">Kategori Terbesar</th>
+            <th data-key="note">Catatan</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div class="empty-state" id="emptyState" style="display:none;">Tidak ada data untuk filter yang dipilih.</div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Data source: Google Sheets via Apps Script JSONP · Terakhir diperbarui: <span id="lastUpdated">—</span>
+</footer>
+
+<script>
+/* ============================================================
+ * CONFIG
+ * ============================================================ */
+const CONFIG = {
+  // Ganti dengan URL /exec hasil deploy Code.gs (Web App)
+  API_URL: 'https://script.google.com/macros/s/AKfycbzt_xQJEELy886IGDsC716B1PYQdhB_DbWOoow899cYndTgjA-Kg8bHclSovxtim4i4yg/exec'
+};
+
+/* ============================================================
+ * STATE
+ * ============================================================ */
+const state = {
+  rows: [],
+  categoryKeys: [],
+  categoryLabels: [],
+  filters: { dateFrom: null, dateTo: null, shifts: new Set(), lines: new Set() },
+  sort: { key: 'date', dir: 'desc' },
+  search: ''
+};
+
+const CAT_COLORS = ['#e0a133','#5b9bc0','#5cb87a','#d9534f','#b98adf','#e07a5f','#6fbf73','#f2c14e','#7aa8d1','#c46b6b'];
+
+let charts = {};
+
+/* ============================================================
+ * DATA LOADING (JSONP)
+ * ============================================================ */
+function loadData() {
+  if (!CONFIG.API_URL || CONFIG.API_URL.indexOf('PASTE_URL') !== -1) {
+    setStatus(false, 'API_URL belum diisi — lihat komentar CONFIG di kode.');
+    return;
+  }
+  setStatus(false, 'Memuat data…');
+  const cbName = 'dtCallback_' + Date.now();
+  window[cbName] = function (payload) {
+    delete window[cbName];
+    script.remove();
+    if (payload.status !== 'success') {
+      setStatus(false, 'Gagal memuat: ' + payload.message);
+      return;
+    }
+    onDataLoaded(payload.data);
+  };
+  const script = document.createElement('script');
+  script.src = CONFIG.API_URL + '?callback=' + cbName;
+  script.onerror = () => setStatus(false, 'Tidak dapat menghubungi API.');
+  document.body.appendChild(script);
+}
+
+function onDataLoaded(data) {
+  state.rows = data.rows || [];
+  state.categoryKeys = (data.categories && data.categories.keys) || [];
+  state.categoryLabels = (data.categories && data.categories.labels) || [];
+
+  setStatus(true, state.rows.length + ' record dimuat');
+  document.getElementById('lastUpdated').textContent = new Date().toLocaleString('id-ID');
+
+  buildFilterOptions();
+  applyFilters();
+}
+
+function setStatus(ok, text) {
+  document.getElementById('statusDot').className = 'dot' + (ok ? '' : ' off');
+  document.getElementById('statusText').textContent = text;
+}
+
+/* ============================================================
+ * FILTERS
+ * ============================================================ */
+function buildFilterOptions() {
+  const dates = state.rows.map(r => r.date).sort();
+  if (dates.length) {
+    document.getElementById('fDateFrom').value = dates[0];
+    document.getElementById('fDateTo').value = dates[dates.length - 1];
+    state.filters.dateFrom = dates[0];
+    state.filters.dateTo = dates[dates.length - 1];
+  }
+
+  const shifts = [...new Set(state.rows.map(r => r.shift))].sort();
+  const lines = [...new Set(state.rows.map(r => r.line))].sort();
+
+  shifts.forEach(s => state.filters.shifts.add(s));
+  lines.forEach(l => state.filters.lines.add(l));
+
+  renderChipGroup('fShift', shifts, state.filters.shifts, s => 'Shift ' + s);
+  renderChipGroup('fLine', lines, state.filters.lines, l => l);
+}
+
+function renderChipGroup(containerId, values, activeSet, labelFn) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  values.forEach(v => {
+    const chip = document.createElement('div');
+    chip.className = 'chip active';
+    chip.textContent = labelFn(v);
+    chip.dataset.value = v;
+    chip.addEventListener('click', () => {
+      if (activeSet.has(v)) { activeSet.delete(v); chip.classList.remove('active'); }
+      else { activeSet.add(v); chip.classList.add('active'); }
+    });
+    el.appendChild(chip);
+  });
+}
+
+function applyFilters() {
+  state.filters.dateFrom = document.getElementById('fDateFrom').value || null;
+  state.filters.dateTo = document.getElementById('fDateTo').value || null;
+
+  render();
+}
+
+function resetFilters() {
+  buildFilterOptions();
+  document.getElementById('tableSearch').value = '';
+  state.search = '';
+  render();
+}
+
+function getFilteredRows() {
+  const { dateFrom, dateTo, shifts, lines } = state.filters;
+  return state.rows.filter(r => {
+    if (dateFrom && r.date < dateFrom) return false;
+    if (dateTo && r.date > dateTo) return false;
+    if (!shifts.has(r.shift)) return false;
+    if (!lines.has(r.line)) return false;
+    if (state.search) {
+      const hay = (r.reportId + ' ' + r.note).toLowerCase();
+      if (hay.indexOf(state.search.toLowerCase()) === -1) return false;
+    }
+    return true;
+  });
+}
+
+/* ============================================================
+ * RENDER ORCHESTRATOR
+ * ============================================================ */
+function render() {
+  const filtered = getFilteredRows();
+  document.getElementById('filterCount').textContent = filtered.length + ' record aktif';
+
+  renderKPI(filtered);
+  renderInsights(filtered);
+  renderLineBoard(filtered);
+  renderCharts(filtered);
+  renderTable(filtered);
+}
+
+/* ============================================================
+ * KPI
+ * ============================================================ */
+function renderKPI(rows) {
+  const grid = document.getElementById('kpiGrid');
+  const total = sum(rows.map(r => r.totalDowntime));
+  const count = rows.length;
+  const avg = count ? (total / count) : 0;
+
+  const byLine = groupSum(rows, 'line');
+  const worstLine = topEntry(byLine);
+
+  const byCat = categoryTotals(rows);
+  const worstCat = topEntry(byCat);
+
+  grid.innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Total Downtime</div>
+      <div class="kpi-value">${fmt(total)} <small>menit</small></div>
+      <div class="kpi-sub">${(total/60).toFixed(1)} jam · ${count} kejadian</div>
+    </div>
+    <div class="kpi-card alt">
+      <div class="kpi-label">Rata-rata / Kejadian</div>
+      <div class="kpi-value">${fmt(avg.toFixed(1))} <small>menit</small></div>
+      <div class="kpi-sub">dari ${count} laporan tercatat</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Line Downtime Tertinggi</div>
+      <div class="kpi-value" style="font-size:18px;">${worstLine ? worstLine[0] : '—'}</div>
+      <div class="kpi-sub">${worstLine ? fmt(worstLine[1]) + ' menit' : ''}</div>
+    </div>
+    <div class="kpi-card alt">
+      <div class="kpi-label">Kategori Downtime Dominan</div>
+      <div class="kpi-value" style="font-size:18px;">${worstCat ? worstCat[0] : '—'}</div>
+      <div class="kpi-sub">${worstCat && total ? ((worstCat[1]/total)*100).toFixed(1) + '% dari total' : ''}</div>
+    </div>
+  `;
+}
+
+/* ============================================================
+ * INSIGHTS (narasi otomatis)
+ * ============================================================ */
+function renderInsights(rows) {
+  const list = document.getElementById('insightList');
+  list.innerHTML = '';
+  if (!rows.length) {
+    list.innerHTML = '<li>Tidak ada data pada rentang filter ini.</li>';
+    return;
+  }
+
+  const total = sum(rows.map(r => r.totalDowntime));
+  const byCat = categoryTotals(rows);
+  const byLine = groupSum(rows, 'line');
+  const byShift = groupSum(rows, 'shift');
+  const byDate = groupSum(rows, 'date');
+
+  const topCat = topEntry(byCat);
+  const topLine = topEntry(byLine);
+  const dateKeys = Object.keys(byDate).sort();
+
+  const insights = [];
+
+  if (topCat) {
+    const pct = ((topCat[1] / total) * 100).toFixed(1);
+    insights.push(`Kategori <b>${topCat[0]}</b> menyumbang <b>${pct}%</b> dari total downtime (${fmt(topCat[1])} menit) — kandidat utama untuk perbaikan.`);
+  }
+
+  if (topLine) {
+    insights.push(`Line <b>${topLine[0]}</b> mencatat downtime tertinggi sebesar <b>${fmt(topLine[1])} menit</b> pada periode terpilih.`);
+  }
+
+  if (Object.keys(byShift).length >= 2) {
+    const shiftEntries = Object.entries(byShift).sort((a,b)=>b[1]-a[1]);
+    const [s1, s2] = shiftEntries;
+    if (s1 && s2) {
+      const diff = s1[1] - s2[1];
+      if (Math.abs(diff) > 0) {
+        insights.push(`Shift <b>${s1[0]}</b> memiliki downtime ${diff > 0 ? 'lebih tinggi' : 'lebih rendah'} <b>${fmt(Math.abs(diff))} menit</b> dibanding Shift ${s2[0]}.`);
+      }
+    }
+  }
+
+  if (dateKeys.length >= 4) {
+    const mid = Math.floor(dateKeys.length / 2);
+    const firstHalf = sum(dateKeys.slice(0, mid).map(d => byDate[d]));
+    const secondHalf = sum(dateKeys.slice(mid).map(d => byDate[d]));
+    if (firstHalf > 0) {
+      const change = ((secondHalf - firstHalf) / firstHalf) * 100;
+      const dir = change > 5 ? 'naik' : (change < -5 ? 'turun' : 'relatif stabil');
+      insights.push(`Tren downtime pada paruh kedua periode <b>${dir}</b> ${Math.abs(change) > 5 ? '(' + change.toFixed(1) + '%)' : ''} dibanding paruh pertama.`);
+    }
+  }
+
+  const worstDay = topEntry(byDate);
+  if (worstDay) {
+    insights.push(`Hari dengan downtime terparah: <b>${worstDay[0]}</b> dengan total <b>${fmt(worstDay[1])} menit</b>.`);
+  }
+
+  insights.forEach(text => {
+    const li = document.createElement('li');
+    li.innerHTML = text;
+    list.appendChild(li);
+  });
+}
+
+/* ============================================================
+ * LINE STATUS BOARD (signature element)
+ * ============================================================ */
+function renderLineBoard(rows) {
+  const wrap = document.getElementById('lineBoard');
+  const byLine = groupSum(rows, 'line');
+  const entries = Object.entries(byLine).sort((a, b) => b[1] - a[1]);
+  const max = entries.length ? entries[0][1] : 1;
+
+  if (!entries.length) {
+    wrap.innerHTML = '<div class="empty-state">Tidak ada data.</div>';
+    return;
+  }
+
+  wrap.innerHTML = entries.map(([line, val]) => `
+    <div class="board-row">
+      <div class="board-line-name">${line}</div>
+      <div class="board-track"><div class="board-fill" style="width:${max ? (val / max) * 100 : 0}%"></div></div>
+      <div class="board-val">${fmt(val)}</div>
+    </div>
+  `).join('');
+}
+
+/* ============================================================
+ * CHARTS
+ * ============================================================ */
+function renderCharts(rows) {
+  renderCategoryChart(rows);
+  renderLineChart(rows);
+  renderTrendChart(rows);
+  renderShiftChart(rows);
+}
+
+function destroyChart(key) {
+  if (charts[key]) { charts[key].destroy(); delete charts[key]; }
+}
+
+const chartDefaults = {
+  color: '#8b939b',
+  font: { family: "'IBM Plex Mono', monospace", size: 11 }
+};
+
+function renderCategoryChart(rows) {
+  destroyChart('category');
+  const totals = categoryTotals(rows);
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+
+  charts.category = new Chart(document.getElementById('chartCategory'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(e => e[0]),
+      datasets: [{
+        data: entries.map(e => e[1]),
+        backgroundColor: entries.map((_, i) => CAT_COLORS[i % CAT_COLORS.length]),
+        borderRadius: 2
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#2b3238' }, ticks: chartDefaults },
+        y: { grid: { display: false }, ticks: chartDefaults }
+      }
+    }
+  });
+}
+
+function renderLineChart(rows) {
+  destroyChart('line');
+  const totals = groupSum(rows, 'line');
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+
+  charts.line = new Chart(document.getElementById('chartLine'), {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(e => e[0]),
+      datasets: [{
+        data: entries.map(e => e[1]),
+        backgroundColor: entries.map((_, i) => CAT_COLORS[i % CAT_COLORS.length]),
+        borderColor: '#1b2025', borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: '#8b939b', font: chartDefaults.font, boxWidth: 10 } } }
+    }
+  });
+}
+
+function renderTrendChart(rows) {
+  destroyChart('trend');
+  const totals = groupSum(rows, 'date');
+  const dates = Object.keys(totals).sort();
+
+  charts.trend = new Chart(document.getElementById('chartTrend'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{
+        label: 'Downtime (menit)',
+        data: dates.map(d => totals[d]),
+        borderColor: '#e0a133',
+        backgroundColor: 'rgba(224,161,51,0.12)',
+        fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#e0a133'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#2b3238' }, ticks: chartDefaults },
+        y: { grid: { color: '#2b3238' }, ticks: chartDefaults }
+      }
+    }
+  });
+}
+
+function renderShiftChart(rows) {
+  destroyChart('shift');
+  const lines = [...new Set(rows.map(r => r.line))].sort();
+  const shifts = [...new Set(rows.map(r => r.shift))].sort();
+
+  const datasets = shifts.map((s, i) => ({
+    label: 'Shift ' + s,
+    data: lines.map(l => sum(rows.filter(r => r.line === l && r.shift === s).map(r => r.totalDowntime))),
+    backgroundColor: i === 0 ? '#5b9bc0' : (i === 1 ? '#e0a133' : CAT_COLORS[(i + 2) % CAT_COLORS.length]),
+    borderRadius: 2
+  }));
+
+  charts.shift = new Chart(document.getElementById('chartShift'), {
+    type: 'bar',
+    data: { labels: lines, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { color: '#8b939b', font: chartDefaults.font, boxWidth: 12 } } },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: chartDefaults },
+        y: { stacked: true, grid: { color: '#2b3238' }, ticks: chartDefaults }
+      }
+    }
+  });
+}
+
+/* ============================================================
+ * TABLE
+ * ============================================================ */
+function renderTable(rows) {
+  const tbody = document.getElementById('tableBody');
+  const emptyState = document.getElementById('emptyState');
+
+  const sorted = [...rows].sort((a, b) => {
+    const dir = state.sort.dir === 'asc' ? 1 : -1;
+    const key = state.sort.key;
+    let va = key === 'topCategory' ? topCategoryOf(a) : a[key];
+    let vb = key === 'topCategory' ? topCategoryOf(b) : b[key];
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+    return String(va).localeCompare(String(vb)) * dir;
+  });
+
+  document.getElementById('tableCount').textContent = sorted.length + ' baris';
+
+  if (!sorted.length) {
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+  emptyState.style.display = 'none';
+
+  tbody.innerHTML = sorted.slice(0, 500).map(r => {
+    const sev = r.totalDowntime >= 30 ? 'var(--red)' : (r.totalDowntime >= 10 ? 'var(--amber)' : 'var(--green)');
+    return `
+      <tr>
+        <td>${r.date}</td>
+        <td><span class="badge-shift">Shift ${r.shift}</span></td>
+        <td>${r.line}</td>
+        <td><span class="sev-dot" style="background:${sev}"></span>${fmt(r.totalDowntime)}</td>
+        <td>${topCategoryOf(r) || '—'}</td>
+        <td style="white-space:normal; max-width:220px;">${r.note || ''}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function topCategoryOf(row) {
+  let best = null, bestVal = -1;
+  state.categoryKeys.forEach((key, i) => {
+    const val = row.categories[key] || 0;
+    if (val > bestVal) { bestVal = val; best = state.categoryLabels[i]; }
+  });
+  return bestVal > 0 ? best : null;
+}
+
+/* ============================================================
+ * HELPERS
+ * ============================================================ */
+function sum(arr) { return arr.reduce((a, b) => a + (Number(b) || 0), 0); }
+
+function groupSum(rows, key) {
+  const map = {};
+  rows.forEach(r => { map[r[key]] = (map[r[key]] || 0) + r.totalDowntime; });
+  return map;
+}
+
+function categoryTotals(rows) {
+  const map = {};
+  state.categoryLabels.forEach(label => map[label] = 0);
+  rows.forEach(r => {
+    state.categoryKeys.forEach((key, i) => {
+      const label = state.categoryLabels[i];
+      map[label] = (map[label] || 0) + (r.categories[key] || 0);
+    });
+  });
+  return map;
+}
+
+function topEntry(obj) {
+  const entries = Object.entries(obj).filter(([,v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  return entries.length ? entries[0] : null;
+}
+
+function fmt(n) {
+  return Number(n).toLocaleString('id-ID');
+}
+
+/* ============================================================
+ * EVENTS
+ * ============================================================ */
+document.getElementById('btnApply').addEventListener('click', applyFilters);
+document.getElementById('btnReset').addEventListener('click', resetFilters);
+document.getElementById('tableSearch').addEventListener('input', (e) => {
+  state.search = e.target.value;
+  render();
+});
+document.querySelectorAll('thead th[data-key]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (state.sort.key === key) state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+    else { state.sort.key = key; state.sort.dir = 'desc'; }
+    render();
+  });
+});
+
+loadData();
+</script>
+</body>
+</html>

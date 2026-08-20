@@ -26,27 +26,27 @@
 </script>
 <style>
   :root{
-    --bg:#f2f3f5;
-    --panel:#ffffff;
-    --panel-2:#eef0f3;
-    --border:#d8dce1;
-    --text:#20242b;
-    --text-dim:#5b636d;
-    --text-faint:#9aa1a8;
-    --amber:#b8710e;
-    --amber-dim:#fbe6c4;
-    --steel:#2a6690;
-    --steel-dim:#d8e8f3;
-    --green:#2f9450;
-    --red:#c0392b;
+    --bg:#f3efe9;
+    --panel:#fdfbf8;
+    --panel-2:#f6f1ea;
+    --border:#e4dbcd;
+    --text:#4a4640;
+    --text-dim:#8a8175;
+    --text-faint:#b6ad9f;
+    --amber:#c9873f;
+    --amber-dim:#f2ddbb;
+    --steel:#5b8a9a;
+    --steel-dim:#dbe9ec;
+    --green:#6ea77f;
+    --red:#c97a72;
     --radius:3px;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
     background:
-      linear-gradient(180deg, rgba(184,113,14,0.04), transparent 200px),
-      repeating-linear-gradient(0deg, rgba(0,0,0,0.012) 0px, transparent 1px, transparent 24px),
+      linear-gradient(180deg, rgba(201,135,63,0.05), transparent 200px),
+      repeating-linear-gradient(0deg, rgba(74,70,64,0.015) 0px, transparent 1px, transparent 24px),
       var(--bg);
     color:var(--text);
     font-family:'IBM Plex Sans', sans-serif;
@@ -58,7 +58,7 @@
   /* ---------- Topbar ---------- */
   header.topbar{
     border-bottom:1px solid var(--border);
-    background:linear-gradient(180deg, #ffffff, #f7f8f9);
+    background:linear-gradient(180deg, #fdfbf8, #f6f0e6);
     padding:18px 28px;
     display:flex;
     align-items:center;
@@ -123,8 +123,8 @@
     color:var(--text-dim); user-select:none; transition:all .12s ease; background:var(--panel-2);
   }
   .chip:hover{border-color:var(--steel);}
-  .chip.active{background:var(--steel-dim); border-color:var(--steel); color:#164a6b;}
-  .chip.active.warn{background:var(--amber-dim); border-color:var(--amber); color:#8a5509;}
+  .chip.active{background:var(--steel-dim); border-color:var(--steel); color:#2c5561;}
+  .chip.active.warn{background:var(--amber-dim); border-color:var(--amber); color:#7a5322;}
   .filter-actions{padding:0 16px 16px; display:flex; gap:10px;}
   .btn{
     font-family:'IBM Plex Mono'; font-size:11px; text-transform:uppercase; letter-spacing:0.06em;
@@ -133,7 +133,7 @@
   }
   .btn:hover{color:var(--text); border-color:var(--text-faint);}
   .btn.primary{border-color:var(--amber); color:var(--amber);}
-  .btn.primary:hover{background:var(--amber-dim); color:#8a5509;}
+  .btn.primary:hover{background:var(--amber-dim); color:#7a5322;}
 
   /* ---------- KPI ---------- */
   .kpi-grid{
@@ -245,6 +245,10 @@
         <label>Line / Mesin</label>
         <div class="chip-row" id="fLine"></div>
       </div>
+      <div class="filter-group">
+        <label>Kategori</label>
+        <div class="chip-row" id="fCategory"></div>
+      </div>
     </div>
     <div class="filter-actions">
       <button class="btn primary" id="btnApply">Terapkan Filter</button>
@@ -293,7 +297,7 @@
   <div class="panel section-gap">
     <div class="panel-title">Detail Data</div>
     <div class="table-toolbar">
-      <input type="text" id="tableSearch" placeholder="Cari Report ID / catatan…">
+      <input type="text" id="tableSearch" placeholder="Cari Mesin / kategori / catatan…">
       <span class="table-count" id="tableCount">0 baris</span>
     </div>
     <div class="table-scroll">
@@ -302,9 +306,9 @@
           <tr>
             <th data-key="date">Tanggal</th>
             <th data-key="shift">Shift</th>
-            <th data-key="line">Line</th>
-            <th data-key="totalDowntime">Total (menit)</th>
-            <th data-key="topCategory">Kategori Terbesar</th>
+            <th data-key="line">Mesin</th>
+            <th data-key="category">Kategori</th>
+            <th data-key="downtime">Downtime (menit)</th>
             <th data-key="note">Catatan</th>
           </tr>
         </thead>
@@ -331,17 +335,18 @@ const CONFIG = {
 
 /* ============================================================
  * STATE
+ * Skema baris data (format panjang, 1 baris = 1 kejadian downtime):
+ *   { date: 'YYYY-MM-DD', shift, line, category, downtime, note }
  * ============================================================ */
 const state = {
   rows: [],
-  categoryKeys: [],
-  categoryLabels: [],
-  filters: { dateFrom: null, dateTo: null, shifts: new Set(), lines: new Set() },
+  allCategories: [],
+  filters: { dateFrom: null, dateTo: null, shifts: new Set(), lines: new Set(), categories: new Set() },
   sort: { key: 'date', dir: 'desc' },
   search: ''
 };
 
-const CAT_COLORS = ['#e0a133','#5b9bc0','#5cb87a','#d9534f','#b98adf','#e07a5f','#6fbf73','#f2c14e','#7aa8d1','#c46b6b'];
+const CAT_COLORS = ['#c9873f','#5b8a9a','#6ea77f','#c97a72','#9a8ab5','#d1a15c','#7fb08f','#c9b45c','#7ea3b8','#b98f8f'];
 
 let charts = {};
 
@@ -372,8 +377,7 @@ function loadData() {
 
 function onDataLoaded(data) {
   state.rows = data.rows || [];
-  state.categoryKeys = (data.categories && data.categories.keys) || [];
-  state.categoryLabels = (data.categories && data.categories.labels) || [];
+  state.allCategories = data.categories || [];
 
   setStatus(true, state.rows.length + ' record dimuat');
   document.getElementById('lastUpdated').textContent = new Date().toLocaleString('id-ID');
@@ -401,12 +405,15 @@ function buildFilterOptions() {
 
   const shifts = [...new Set(state.rows.map(r => r.shift))].sort();
   const lines = [...new Set(state.rows.map(r => r.line))].sort();
+  const categories = state.allCategories.length ? state.allCategories : [...new Set(state.rows.map(r => r.category))].sort();
 
   shifts.forEach(s => state.filters.shifts.add(s));
   lines.forEach(l => state.filters.lines.add(l));
+  categories.forEach(c => state.filters.categories.add(c));
 
   renderChipGroup('fShift', shifts, state.filters.shifts, s => 'Shift ' + s);
   renderChipGroup('fLine', lines, state.filters.lines, l => l);
+  renderChipGroup('fCategory', categories, state.filters.categories, c => c);
 }
 
 function renderChipGroup(containerId, values, activeSet, labelFn) {
@@ -440,14 +447,15 @@ function resetFilters() {
 }
 
 function getFilteredRows() {
-  const { dateFrom, dateTo, shifts, lines } = state.filters;
+  const { dateFrom, dateTo, shifts, lines, categories } = state.filters;
   return state.rows.filter(r => {
     if (dateFrom && r.date < dateFrom) return false;
     if (dateTo && r.date > dateTo) return false;
     if (!shifts.has(r.shift)) return false;
     if (!lines.has(r.line)) return false;
+    if (!categories.has(r.category)) return false;
     if (state.search) {
-      const hay = (r.reportId + ' ' + r.note).toLowerCase();
+      const hay = (r.line + ' ' + r.category + ' ' + r.note).toLowerCase();
       if (hay.indexOf(state.search.toLowerCase()) === -1) return false;
     }
     return true;
@@ -473,14 +481,14 @@ function render() {
  * ============================================================ */
 function renderKPI(rows) {
   const grid = document.getElementById('kpiGrid');
-  const total = sum(rows.map(r => r.totalDowntime));
+  const total = sum(rows.map(r => r.downtime));
   const count = rows.length;
   const avg = count ? (total / count) : 0;
 
   const byLine = groupSum(rows, 'line');
   const worstLine = topEntry(byLine);
 
-  const byCat = categoryTotals(rows);
+  const byCat = groupSum(rows, 'category');
   const worstCat = topEntry(byCat);
 
   grid.innerHTML = `
@@ -492,7 +500,7 @@ function renderKPI(rows) {
     <div class="kpi-card alt">
       <div class="kpi-label">Rata-rata / Kejadian</div>
       <div class="kpi-value">${fmt(avg.toFixed(1))} <small>menit</small></div>
-      <div class="kpi-sub">dari ${count} laporan tercatat</div>
+      <div class="kpi-sub">dari ${count} kejadian tercatat</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Line Downtime Tertinggi</div>
@@ -518,8 +526,8 @@ function renderInsights(rows) {
     return;
   }
 
-  const total = sum(rows.map(r => r.totalDowntime));
-  const byCat = categoryTotals(rows);
+  const total = sum(rows.map(r => r.downtime));
+  const byCat = groupSum(rows, 'category');
   const byLine = groupSum(rows, 'line');
   const byShift = groupSum(rows, 'shift');
   const byDate = groupSum(rows, 'date');
@@ -611,14 +619,14 @@ function destroyChart(key) {
 }
 
 const chartDefaults = {
-  color: '#5b636d',
+  color: '#8a8175',
   font: { family: "'IBM Plex Mono', monospace", size: 11 }
 };
-const CHART_GRID = '#e2e5e9';
+const CHART_GRID = '#e8e0d3';
 
 function renderCategoryChart(rows) {
   destroyChart('category');
-  const totals = categoryTotals(rows);
+  const totals = groupSum(rows, 'category');
   const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
 
   charts.category = new Chart(document.getElementById('chartCategory'), {
@@ -655,12 +663,12 @@ function renderLineChart(rows) {
       datasets: [{
         data: entries.map(e => e[1]),
         backgroundColor: entries.map((_, i) => CAT_COLORS[i % CAT_COLORS.length]),
-        borderColor: '#ffffff', borderWidth: 2
+        borderColor: '#fdfbf8', borderWidth: 2
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { color: '#5b636d', font: chartDefaults.font, boxWidth: 10 } } }
+      plugins: { legend: { position: 'bottom', labels: { color: '#8a8175', font: chartDefaults.font, boxWidth: 10 } } }
     }
   });
 }
@@ -677,9 +685,9 @@ function renderTrendChart(rows) {
       datasets: [{
         label: 'Downtime (menit)',
         data: dates.map(d => totals[d]),
-        borderColor: '#b8710e',
-        backgroundColor: 'rgba(184,113,14,0.12)',
-        fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#b8710e'
+        borderColor: '#c9873f',
+        backgroundColor: 'rgba(201,135,63,0.14)',
+        fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#c9873f'
       }]
     },
     options: {
@@ -700,8 +708,8 @@ function renderShiftChart(rows) {
 
   const datasets = shifts.map((s, i) => ({
     label: 'Shift ' + s,
-    data: lines.map(l => sum(rows.filter(r => r.line === l && r.shift === s).map(r => r.totalDowntime))),
-    backgroundColor: i === 0 ? '#2a6690' : (i === 1 ? '#b8710e' : CAT_COLORS[(i + 2) % CAT_COLORS.length]),
+    data: lines.map(l => sum(rows.filter(r => r.line === l && r.shift === s).map(r => r.downtime))),
+    backgroundColor: i === 0 ? '#5b8a9a' : (i === 1 ? '#c9873f' : CAT_COLORS[(i + 2) % CAT_COLORS.length]),
     borderRadius: 2
   }));
 
@@ -710,7 +718,7 @@ function renderShiftChart(rows) {
     data: { labels: lines, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top', labels: { color: '#5b636d', font: chartDefaults.font, boxWidth: 12 } } },
+      plugins: { legend: { position: 'top', labels: { color: '#8a8175', font: chartDefaults.font, boxWidth: 12 } } },
       scales: {
         x: { stacked: true, grid: { display: false }, ticks: chartDefaults },
         y: { stacked: true, grid: { color: CHART_GRID }, ticks: chartDefaults }
@@ -729,8 +737,8 @@ function renderTable(rows) {
   const sorted = [...rows].sort((a, b) => {
     const dir = state.sort.dir === 'asc' ? 1 : -1;
     const key = state.sort.key;
-    let va = key === 'topCategory' ? topCategoryOf(a) : a[key];
-    let vb = key === 'topCategory' ? topCategoryOf(b) : b[key];
+    let va = a[key];
+    let vb = b[key];
     if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
     return String(va).localeCompare(String(vb)) * dir;
   });
@@ -745,27 +753,18 @@ function renderTable(rows) {
   emptyState.style.display = 'none';
 
   tbody.innerHTML = sorted.slice(0, 500).map(r => {
-    const sev = r.totalDowntime >= 30 ? 'var(--red)' : (r.totalDowntime >= 10 ? 'var(--amber)' : 'var(--green)');
+    const sev = r.downtime >= 30 ? 'var(--red)' : (r.downtime >= 10 ? 'var(--amber)' : 'var(--green)');
     return `
       <tr>
         <td>${r.date}</td>
         <td><span class="badge-shift">Shift ${r.shift}</span></td>
         <td>${r.line}</td>
-        <td><span class="sev-dot" style="background:${sev}"></span>${fmt(r.totalDowntime)}</td>
-        <td>${topCategoryOf(r) || '—'}</td>
+        <td>${r.category}</td>
+        <td><span class="sev-dot" style="background:${sev}"></span>${fmt(r.downtime)}</td>
         <td style="white-space:normal; max-width:220px;">${r.note || ''}</td>
       </tr>
     `;
   }).join('');
-}
-
-function topCategoryOf(row) {
-  let best = null, bestVal = -1;
-  state.categoryKeys.forEach((key, i) => {
-    const val = row.categories[key] || 0;
-    if (val > bestVal) { bestVal = val; best = state.categoryLabels[i]; }
-  });
-  return bestVal > 0 ? best : null;
 }
 
 /* ============================================================
@@ -775,19 +774,7 @@ function sum(arr) { return arr.reduce((a, b) => a + (Number(b) || 0), 0); }
 
 function groupSum(rows, key) {
   const map = {};
-  rows.forEach(r => { map[r[key]] = (map[r[key]] || 0) + r.totalDowntime; });
-  return map;
-}
-
-function categoryTotals(rows) {
-  const map = {};
-  state.categoryLabels.forEach(label => map[label] = 0);
-  rows.forEach(r => {
-    state.categoryKeys.forEach((key, i) => {
-      const label = state.categoryLabels[i];
-      map[label] = (map[label] || 0) + (r.categories[key] || 0);
-    });
-  });
+  rows.forEach(r => { map[r[key]] = (map[r[key]] || 0) + r.downtime; });
   return map;
 }
 
